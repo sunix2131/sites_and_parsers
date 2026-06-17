@@ -209,7 +209,14 @@ def check_yandex_org_links(
             continue
         try:
             log(f"[{index}/{len(urls)}] Проверяю карточку: {url}")
-            lead = scrape_yandex_org_url(url, headless=headless, log=log, light_parse=False)
+            lead = asyncio.run(
+                scrape_yandex_org_url(
+                    url,
+                    headless=headless,
+                    log=log,
+                    light_parse=False,
+                )
+            )
             checked += 1
             append_processed_leads_csv(processed_path, [lead])
             processed_urls.add(identity)
