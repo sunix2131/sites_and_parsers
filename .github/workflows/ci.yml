@@ -11,14 +11,14 @@ jobs:
   parser:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt pytest pip-audit
       - run: pip-audit -r requirements.txt
-      - run: pytest -q tests
+      - run: python -m pytest -q tests
       - run: python -m compileall -q maps_parser
 
   backend:
@@ -32,15 +32,15 @@ jobs:
       SECRET_KEY: 0123456789abcdef0123456789abcdef
       ADMIN_PASSWORD: correct-horse-battery-staple
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: web/backend/requirements.txt
       - run: pip install -r requirements.txt pytest pip-audit
       - run: pip-audit -r requirements.txt
-      - run: pytest -q
+      - run: python -m pytest -q
       - run: python -c "from app.main import app; assert app.title == 'LeadCRM'"
       - run: python -m compileall -q app
 
@@ -50,8 +50,8 @@ jobs:
       run:
         working-directory: web/frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
