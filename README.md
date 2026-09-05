@@ -1,4 +1,4 @@
-# Maps Parser
+# LeadMap
 
 Личный рабочий инструмент для сбора открытых карточек организаций из Яндекс Карт. Он помогает найти компании по городу и категории, проверить наличие сайта, сохранить результат в CSV и вести дальнейшую обработку лидов без ручного копирования каждой карточки.
 
@@ -40,7 +40,7 @@ cp .env.example .env
 В PowerShell активация окружения и копирование файла выглядят так:
 
 ```powershell
-.\\.venv\\Scripts\\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 Copy-Item .env.example .env
 ```
 
@@ -77,9 +77,9 @@ python run.py bot
 Отправка email вынесена в отдельную команду и требует осознанного подтверждения:
 
 ```bash
-python run.py send \\
-  --input out/messages_20260905_120000.jsonl \\
-  --send-emails \\
+python run.py send \
+  --input out/messages_20260905_120000.jsonl \
+  --send-emails \
   --confirm-send I_UNDERSTAND_THIS_SENDS_EMAIL
 ```
 
