@@ -20,7 +20,7 @@ interface Screenshot {
   project_id: number;
   filename: string;
   original_filename: string;
-  file_path: string;
+  url: string;
   sort_order: number;
 }
 
@@ -470,9 +470,9 @@ export default function PortfolioAdmin() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {selectedProject.screenshots.map((shot) => (
               <div key={shot.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden group">
-                <div className="aspect-video bg-slate-100 relative cursor-pointer" onClick={() => setPreviewImage(`/uploads/${shot.file_path.split('/').slice(-3).join('/')}`)}>
+                <div className="aspect-video bg-slate-100 relative cursor-pointer" onClick={() => setPreviewImage(shot.url)}>
                   <img
-                    src={`/uploads/${shot.file_path.split('/').slice(-3).join('/')}`}
+                    src={shot.url}
                     alt={shot.original_filename}
                     className="w-full h-full object-cover"
                   />

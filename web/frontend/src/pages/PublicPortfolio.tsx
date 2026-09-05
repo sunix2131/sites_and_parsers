@@ -14,7 +14,7 @@ interface Screenshot {
   id: number;
   filename: string;
   original_filename: string;
-  file_path: string;
+  url: string;
 }
 
 interface Project {
@@ -96,8 +96,7 @@ export default function PublicPortfolio() {
   };
 
   const getImageUrl = (shot: Screenshot) => {
-    const parts = shot.file_path.split('/');
-    return `/uploads/${parts.slice(-3).join('/')}`;
+    return shot.url;
   };
 
   return (

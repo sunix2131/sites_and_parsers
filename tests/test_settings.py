@@ -22,7 +22,7 @@ class SettingsTests(unittest.TestCase):
         self.assertFalse(settings.TELEGRAM_BROWSER_VISIBLE)
 
     def test_run_modes(self) -> None:
-        self.assertEqual(FAST_MODE.page_delay, 5.0)
+        self.assertEqual(FAST_MODE.page_delay, 2.0)
         self.assertEqual(LONG_MODE.page_delay, 30.0)
         self.assertEqual(LONG_MODE.captcha_retry_seconds, 600)
         self.assertLess(LONG_MODE.scroll_step_px, FAST_MODE.scroll_step_px)

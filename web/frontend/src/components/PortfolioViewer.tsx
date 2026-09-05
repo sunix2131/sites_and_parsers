@@ -16,7 +16,7 @@ interface Screenshot {
   id: number;
   filename: string;
   original_filename: string;
-  file_path: string;
+  url: string;
 }
 
 interface Project {
@@ -192,7 +192,7 @@ export default function PortfolioViewer({ onClose }: Props) {
                   <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center shrink-0 overflow-hidden">
                     {proj.screenshots.length > 0 ? (
                       <img
-                        src={`/uploads/${proj.screenshots[0].file_path.split('/').slice(-3).join('/')}`}
+                        src={proj.screenshots[0].url}
                         alt=""
                         className="w-full h-full object-cover"
                       />
@@ -227,10 +227,10 @@ export default function PortfolioViewer({ onClose }: Props) {
                   <div
                     key={shot.id}
                     className="aspect-video bg-slate-100 rounded-xl overflow-hidden cursor-pointer group relative"
-                    onClick={() => setPreviewImage(`/uploads/${shot.file_path.split('/').slice(-3).join('/')}`)}
+                    onClick={() => setPreviewImage(shot.url)}
                   >
                     <img
-                      src={`/uploads/${shot.file_path.split('/').slice(-3).join('/')}`}
+                      src={shot.url}
                       alt={shot.original_filename}
                       className="w-full h-full object-cover"
                     />

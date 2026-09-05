@@ -1,1 +1,0 @@
-{"root":["./src/App.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/api/client.ts","./src/components/PortfolioAdmin.tsx","./src/components/PortfolioViewer.tsx","./src/context/AuthContext.tsx","./src/pages/AdminDashboard.tsx","./src/pages/LoginPage.tsx","./src/pages/PublicPortfolio.tsx","./src/pages/SellerDashboard.tsx"],"version":"5.9.3"}

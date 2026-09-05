@@ -1,15 +1,17 @@
 import asyncio
+import logging
 import subprocess
+import sys
 import threading
 import uuid
 import csv
 import glob
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.auth import require_admin, get_current_user
@@ -18,28 +20,29 @@ from app.config import settings
 from app.database import async_session
 
 router = APIRouter(prefix="/api/parser", tags=["parser"])
+logger = logging.getLogger(__name__)
 
 tasks = {}
+MAX_TASK_OUTPUT_CHARS = 200_000
 
 
 class ParserRunRequest(BaseModel):
-    query: str
-    location: str
-    limit: int = 20
-    mode: str = "scrape"
+    query: str = Field(min_length=1, max_length=200)
+    location: str = Field(min_length=1, max_length=120)
+    limit: int = Field(default=20, ge=1, le=1000)
+    mode: Literal["scrape", "run"] = "scrape"
 
 
 class TaskResponse(BaseModel):
     task_id: str
     status: str
     started_at: str
+    mode: Literal["scrape", "run"]
     output: Optional[str] = None
 
 
 async def import_csv_leads(parser_dir: Path):
-    csv_files = glob.glob(str(parser_dir / "output" / "*.csv"))
-    if not csv_files:
-        csv_files = glob.glob(str(parser_dir / "*.csv"))
+    csv_files = glob.glob(str(parser_dir / "out" / "*.csv"))
 
     for csv_file in csv_files:
         try:
@@ -96,12 +99,16 @@ async def import_csv_leads(parser_dir: Path):
 
                 await db.commit()
         except Exception:
-            pass
+            logger.exception("Failed to import parser output from %s", csv_file)
 
 
 def run_parser_task(task_id: str, query: str, location: str, limit: int, mode: str):
     parser_dir = Path(settings.PARSER_DIR)
-    python_path = parser_dir / ".venv" / "bin" / "python"
+    python_path = parser_dir / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+    if not python_path.is_file():
+        tasks[task_id]["status"] = "error"
+        tasks[task_id]["output"] = f"Parser interpreter not found: {python_path}"
+        return
 
     cmd = [
         str(python_path),
@@ -126,8 +133,12 @@ def run_parser_task(task_id: str, query: str, location: str, limit: int, mode: s
         tasks[task_id]["process"] = process
 
         output_lines = []
+        output_size = 0
         for line in process.stdout:
             output_lines.append(line)
+            output_size += len(line)
+            while output_size > MAX_TASK_OUTPUT_CHARS and output_lines:
+                output_size -= len(output_lines.pop(0))
             tasks[task_id]["output"] = "".join(output_lines)
 
         process.wait()
@@ -155,6 +166,7 @@ async def run_parser(
         "status": "pending",
         "output": "",
         "started_at": datetime.now().isoformat(),
+        "mode": request.mode,
         "process": None,
     }
 
@@ -169,6 +181,7 @@ async def run_parser(
         task_id=task_id,
         status="pending",
         started_at=tasks[task_id]["started_at"],
+        mode=request.mode,
     )
 
 
@@ -179,6 +192,7 @@ async def list_tasks(current_user: User = Depends(get_current_user)):
             task_id=task_id,
             status=task["status"],
             started_at=task["started_at"],
+            mode=task["mode"],
             output=None,
         )
         for task_id, task in tasks.items()
@@ -195,6 +209,7 @@ async def get_task(task_id: str, current_user: User = Depends(get_current_user))
         task_id=task_id,
         status=task["status"],
         started_at=task["started_at"],
+        mode=task["mode"],
         output=task["output"],
     )
 

@@ -28,12 +28,10 @@ async def lifespan(app: FastAPI):
             db.add(admin)
             await db.commit()
 
-    upload_dir = Path(settings.UPLOAD_DIR)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-
     yield
 
 
+Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="LeadCRM", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(

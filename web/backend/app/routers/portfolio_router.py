@@ -1,9 +1,6 @@
-import os
 import uuid
 from pathlib import Path
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.database import get_db
@@ -17,6 +14,14 @@ from app.auth import get_current_user, require_admin
 from app.config import settings
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
+MAX_SCREENSHOTS_PER_REQUEST = 10
+MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024
+IMAGE_EXTENSIONS = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
 
 
 def slugify(text: str) -> str:
@@ -30,6 +35,31 @@ def ensure_upload_dir(category_slug: str, project_slug: str) -> Path:
     upload_path = Path(settings.UPLOAD_DIR) / category_slug / project_slug
     upload_path.mkdir(parents=True, exist_ok=True)
     return upload_path
+
+
+def screenshot_payload(
+    screenshot: PortfolioScreenshot,
+    category_slug: str,
+    project_slug: str,
+) -> dict[str, object]:
+    return {
+        "id": screenshot.id,
+        "project_id": screenshot.project_id,
+        "filename": screenshot.filename,
+        "original_filename": screenshot.original_filename,
+        "url": f"/uploads/{category_slug}/{project_slug}/{screenshot.filename}",
+        "sort_order": screenshot.sort_order,
+        "created_at": screenshot.created_at,
+    }
+
+
+def delete_upload_file(stored_path: str) -> None:
+    upload_root = Path(settings.UPLOAD_DIR).resolve()
+    candidate = Path(stored_path).resolve()
+    if candidate == upload_root or upload_root not in candidate.parents:
+        return
+    if candidate.is_file():
+        candidate.unlink()
 
 
 @router.get("/categories", response_model=list[PortfolioCategoryOut])
@@ -73,7 +103,7 @@ async def list_category_projects(
     for proj in projects:
         proj_dict = {c.name: getattr(proj, c.name) for c in PortfolioProject.__table__.columns}
         proj_dict["screenshots"] = [
-            {c.name: getattr(s, c.name) for c in PortfolioScreenshot.__table__.columns}
+            screenshot_payload(s, category.slug, proj.slug)
             for s in (proj.screenshots or [])
         ]
         output.append(proj_dict)
@@ -92,7 +122,7 @@ async def get_project(
     
     proj_dict = {c.name: getattr(project, c.name) for c in PortfolioProject.__table__.columns}
     proj_dict["screenshots"] = [
-        {c.name: getattr(s, c.name) for c in PortfolioScreenshot.__table__.columns}
+        screenshot_payload(s, project.category.slug, project.slug)
         for s in (project.screenshots or [])
     ]
     return proj_dict
@@ -167,9 +197,7 @@ async def delete_category(
     
     for project in category.projects:
         for screenshot in project.screenshots:
-            file_path = Path(screenshot.file_path)
-            if file_path.exists():
-                file_path.unlink()
+            delete_upload_file(screenshot.file_path)
             await db.delete(screenshot)
         await db.delete(project)
     
@@ -232,7 +260,7 @@ async def update_project(
     
     proj_dict = {c.name: getattr(project, c.name) for c in PortfolioProject.__table__.columns}
     proj_dict["screenshots"] = [
-        {c.name: getattr(s, c.name) for c in PortfolioScreenshot.__table__.columns}
+        screenshot_payload(s, project.category.slug, project.slug)
         for s in (project.screenshots or [])
     ]
     return proj_dict
@@ -250,9 +278,7 @@ async def delete_project(
         raise HTTPException(status_code=404, detail="Проект не найдена")
     
     for screenshot in project.screenshots:
-        file_path = Path(screenshot.file_path)
-        if file_path.exists():
-            file_path.unlink()
+        delete_upload_file(screenshot.file_path)
         await db.delete(screenshot)
     
     await db.delete(project)
@@ -274,6 +300,9 @@ async def upload_screenshots(
     
     category_result = await db.execute(select(PortfolioCategory).where(PortfolioCategory.id == project.category_id))
     category = category_result.scalar_one()
+
+    if len(files) > MAX_SCREENSHOTS_PER_REQUEST:
+        raise HTTPException(status_code=413, detail="Слишком много файлов в одном запросе")
     
     upload_path = ensure_upload_dir(category.slug, project.slug)
     
@@ -282,22 +311,29 @@ async def upload_screenshots(
     )
     max_order = max_order_result.scalar() or 0
     
+    validated_files: list[tuple[UploadFile, str, bytes]] = []
+    for file in files:
+        content_type = (file.content_type or "").lower()
+        extension = IMAGE_EXTENSIONS.get(content_type)
+        if extension is None:
+            raise HTTPException(status_code=415, detail="Поддерживаются JPEG, PNG, WebP и GIF")
+        content = await file.read(MAX_SCREENSHOT_BYTES + 1)
+        if not content:
+            raise HTTPException(status_code=400, detail="Пустой файл нельзя загрузить")
+        if len(content) > MAX_SCREENSHOT_BYTES:
+            raise HTTPException(status_code=413, detail="Файл превышает лимит 8 МБ")
+        validated_files.append((file, extension, content))
+
     uploaded = []
-    for i, file in enumerate(files):
-        if not file.content_type or not file.content_type.startswith("image/"):
-            continue
-        
-        ext = Path(file.filename).suffix or ".jpg"
-        filename = f"{uuid.uuid4().hex}{ext}"
+    for i, (file, extension, content) in enumerate(validated_files):
+        filename = f"{uuid.uuid4().hex}{extension}"
         file_path = upload_path / filename
-        
-        content = await file.read()
         file_path.write_bytes(content)
         
         screenshot = PortfolioScreenshot(
             project_id=project_id,
             filename=filename,
-            original_filename=file.filename or "",
+            original_filename=(file.filename or "")[:255],
             file_path=str(file_path),
             sort_order=max_order + i + 1,
         )
@@ -307,7 +343,7 @@ async def upload_screenshots(
     await db.flush()
     
     return [
-        {c.name: getattr(s, c.name) for c in PortfolioScreenshot.__table__.columns}
+        screenshot_payload(s, category.slug, project.slug)
         for s in uploaded
     ]
 
@@ -323,22 +359,8 @@ async def delete_screenshot(
     if not screenshot:
         raise HTTPException(status_code=404, detail="Скриншот не найден")
     
-    file_path = Path(screenshot.file_path)
-    if file_path.exists():
-        file_path.unlink()
+    delete_upload_file(screenshot.file_path)
     
     await db.delete(screenshot)
     await db.flush()
     return {"ok": True}
-
-
-@router.get("/uploads/{category_slug}/{project_slug}/{filename}")
-async def serve_screenshot(
-    category_slug: str,
-    project_slug: str,
-    filename: str,
-):
-    file_path = Path(settings.UPLOAD_DIR) / category_slug / project_slug / filename
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Файл не найден")
-    return FileResponse(file_path)

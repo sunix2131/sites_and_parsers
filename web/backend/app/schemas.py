@@ -160,7 +160,7 @@ class PortfolioScreenshotOut(BaseModel):
     project_id: int
     filename: str
     original_filename: str
-    file_path: str
+    url: str
     sort_order: int
     created_at: datetime
 
