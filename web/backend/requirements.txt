@@ -10,3 +10,4 @@ pydantic>=2.10.0
 pydantic-settings>=2.7.0
 python-dotenv>=1.0.1
 httpx>=0.28.0
+idna==3.19
