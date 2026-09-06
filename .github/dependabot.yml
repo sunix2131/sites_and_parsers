@@ -25,6 +25,9 @@ updates:
     directory: /web/frontend
     schedule:
       interval: monthly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       frontend-dependencies:
         patterns: ["*"]
